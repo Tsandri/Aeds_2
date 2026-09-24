@@ -23,19 +23,15 @@ class Data {
     public int getDia() { return dia; }
     public void setDia(int dia) { this.dia = dia; }
 
-    // Separa a String da data AAAA-MM-DD
     public static Data parseData(String s) {
         if (s == null || s.length() == 0) return null;
-
         String[] partes = s.split("-");
         int a = Integer.parseInt(partes[0]);
         int m = Integer.parseInt(partes[1]);
         int d = Integer.parseInt(partes[2]);
-
         return new Data(a, m, d);
     }
 
-    // Retorna a data no formato DD/MM/YYYY
     public String format() {
         return String.format("%02d/%02d/%04d", dia, mes, ano);
     }
@@ -103,7 +99,6 @@ class Veiculo {
     public Data getDataRegistro() { return dataRegistro; }
     public void setDataRegistro(Data dataRegistro) { this.dataRegistro = dataRegistro; }
 
-    // Preenche o objeto com a linha do CSV
     public static Veiculo parseVeiculo(String s) {
         Veiculo v = new Veiculo();
         String[] campos = s.split(",");
@@ -114,7 +109,6 @@ class Veiculo {
         v.setAno(Integer.parseInt(campos[3]));
         v.setCategoria(campos[4]);
 
-        // Separando os combustiveis por ;
         String[] comb = campos[5].split(";");
         v.setCombustivel(comb);
 
@@ -131,7 +125,6 @@ class Veiculo {
         return v;
     }
 
-    // Saida no padrao do Verde da PUC
     public String format() {
         String combStr = "[";
         if (combustivel != null) {
@@ -161,12 +154,10 @@ class LeitorCsv {
             File arq = new File(caminhoArquivo);
             Scanner scanner = new Scanner(arq);
 
-            // Ignora a primeira linha do cabecalho
             if (scanner.hasNextLine()) {
                 scanner.nextLine();
             }
 
-            // Le cada linha do CSV
             while (scanner.hasNextLine()) {
                 String linha = scanner.nextLine();
                 if (linha.length() > 0) {
@@ -175,7 +166,7 @@ class LeitorCsv {
             }
             scanner.close();
         } catch (Exception e) {
-            // Trata arquivo nao encontrado localmente
+            // tratamento de arquivo nao encontrado
         }
 
         Veiculo[] resultado = new Veiculo[count];
@@ -186,24 +177,53 @@ class LeitorCsv {
     }
 }
 
-public class Modelagem {
+public class Insercao {
+
+    // Algoritmo de Insercao pela marca
+    public static void insercaoMarca(Veiculo[] v, int n) {
+        for (int i = 1; i < n; i++) {
+            Veiculo tmp = v[i];
+            int j = i - 1;
+
+            // Se as marcas forem iguais, desempatamos pelo ID
+            while (j >= 0 && (v[j].getMarca().compareTo(tmp.getMarca()) > 0 || 
+                  (v[j].getMarca().equals(tmp.getMarca()) && v[j].getId() > tmp.getId()))) {
+                v[j + 1] = v[j];
+                j--;
+            }
+            v[j + 1] = tmp;
+        }
+    }
+
     public static void main(String[] args) {
-        Veiculo[] veiculos = LeitorCsv.ler("/tmp/VEICULOS.CSV");
+        Veiculo[] todosVeiculos = LeitorCsv.ler("/tmp/VEICULOS.CSV");
+
+        Veiculo[] selecionados = new Veiculo[20000];
+        int numSelecionados = 0;
 
         Scanner sc = new Scanner(System.in);
 
-        // Pesquisa ate a entrada receber -1
+        // Le os IDs ate encontrar -1
         while (sc.hasNextInt()) {
             int idBusca = sc.nextInt();
             if (idBusca == -1) break;
 
-            for (int i = 0; i < veiculos.length; i++) {
-                if (veiculos[i] != null && veiculos[i].getId() == idBusca) {
-                    System.out.println(veiculos[i].format());
+            for (int i = 0; i < todosVeiculos.length; i++) {
+                if (todosVeiculos[i] != null && todosVeiculos[i].getId() == idBusca) {
+                    selecionados[numSelecionados++] = todosVeiculos[i];
                     break;
                 }
             }
         }
+
+        // Ordenacao por Insercao
+        insercaoMarca(selecionados, numSelecionados);
+
+        // Imprime o resultado ordenado
+        for (int i = 0; i < numSelecionados; i++) {
+            System.out.println(selecionados[i].format());
+        }
+
         sc.close();
     }
 }
