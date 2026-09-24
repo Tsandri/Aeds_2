@@ -144,11 +144,10 @@ class Veiculo {
         }
         combStr += "]";
 
-        return "[" + id + " ## " + marca + " ## " + modelo + " ## " + ano + " ## " +
-               categoria + " ## " + combStr + " ## " + cilindros + " ## " +
-               cilindrada + " ## " + transmissao + " ## " + tracao + " ## " +
-               consumoCidade + " ## " + consumoEstrada + " ## " + co2 + " ## " +
-               turbo + " ## " + (dataRegistro != null ? dataRegistro.format() : "") + "]";
+            return String.format(java.util.Locale.US,"[%d ## %s ## %s ## %d ## %s ## %s ## %d ## %.1f ## %s ## %s ## %.2f ## %.2f ## %.1f ## %b ## %s]",
+        id, marca, modelo, ano, categoria, combStr, cilindros,
+        cilindrada, transmissao, tracao, consumoCidade, consumoEstrada,
+        co2, turbo, (dataRegistro != null ? dataRegistro.format() : ""));
     }
 }
 
@@ -188,7 +187,7 @@ class LeitorCsv {
 
 public class Modelagem {
     public static void main(String[] args) {
-        Veiculo[] veiculos = LeitorCsv.ler("/tmp/VEICULOS.CSV");
+        Veiculo[] veiculos = LeitorCsv.ler("/tmp/veiculos.csv");
 
         Scanner sc = new Scanner(System.in);
 
