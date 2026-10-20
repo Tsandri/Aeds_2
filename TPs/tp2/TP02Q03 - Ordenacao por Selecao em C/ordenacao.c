@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <stdbool.h>
 
 typedef struct {
@@ -28,36 +29,26 @@ typedef struct {
     Data dataRegistro;
 } Veiculo;
 
-// Remove espacos e quebras das pontas
-void limparEspacos(char* dest, const char* src) {
-    if (src == NULL) {
-        dest[0] = '\0';
-        return;
+void trim(char* str) {
+    if (str == NULL || strlen(str) == 0) return;
+    int i = 0;
+    while (str[i] == ' ' || str[i] == '\t' || str[i] == '\r' || str[i] == '\n') i++;
+    if (i > 0) {
+        int j = 0;
+        while (str[i] != '\0') str[j++] = str[i++];
+        str[j] = '\0';
     }
-    int inicio = 0;
-    int fim = strlen(src) - 1;
-
-    while (inicio <= fim && (src[inicio] <= ' ' || src[inicio] == '\r' || src[inicio] == '\n')) {
-        inicio++;
+    int len = strlen(str);
+    while (len > 0 && (str[len - 1] == ' ' || str[len - 1] == '\t' || str[len - 1] == '\r' || str[len - 1] == '\n')) {
+        str[len - 1] = '\0';
+        len--;
     }
-    while (fim >= inicio && (src[fim] <= ' ' || src[fim] == '\r' || src[fim] == '\n')) {
-        fim--;
-    }
-
-    int k = 0;
-    for (int i = inicio; i <= fim; i++) {
-        dest[k++] = src[i];
-    }
-    dest[k] = '\0';
 }
 
 Data parseData(char* s) {
-    Data d;
-    d.ano = 0; d.mes = 0; d.dia = 0;
-    char temp[100];
-    limparEspacos(temp, s);
-    if (strlen(temp) > 0) {
-        sscanf(temp, "%d-%d-%d", &d.ano, &d.mes, &d.dia);
+    Data d = {0, 0, 0};
+    if (s != NULL && strlen(s) >= 8) {
+        sscanf(s, "%d-%d-%d", &d.ano, &d.mes, &d.dia);
     }
     return d;
 }
@@ -66,21 +57,27 @@ void formatData(Data d, char* buffer) {
     sprintf(buffer, "%02d/%02d/%04d", d.dia, d.mes, d.ano);
 }
 
+int separarCampos(char* linha, char campos[15][200]) {
+    int col = 0, pos = 0, len = strlen(linha);
+    for (int i = 0; i <= len && col < 15; i++) {
+        if (linha[i] == ',' || linha[i] == '\0' || linha[i] == '\n' || linha[i] == '\r') {
+            campos[col][pos] = '\0';
+            trim(campos[col]);
+            col++;
+            pos = 0;
+            if (linha[i] == '\0' || linha[i] == '\n' || linha[i] == '\r') break;
+        } else {
+            if (pos < 199) campos[col][pos++] = linha[i];
+        }
+    }
+    return col;
+}
+
 Veiculo parseVeiculo(char* s) {
     Veiculo v;
     v.numCombustiveis = 0;
-    char tempLine[2048];
-    strcpy(tempLine, s);
-
     char campos[15][200];
-    int col = 0;
-
-    char* token = strtok(tempLine, ",");
-    while (token != NULL && col < 15) {
-        limparEspacos(campos[col], token);
-        col++;
-        token = strtok(NULL, ",");
-    }
+    separarCampos(s, campos);
 
     v.id = atoi(campos[0]);
     strcpy(v.marca, campos[1]);
@@ -88,13 +85,13 @@ Veiculo parseVeiculo(char* s) {
     v.ano = atoi(campos[3]);
     strcpy(v.categoria, campos[4]);
 
-    char combTemp[200];
-    strcpy(combTemp, campos[5]);
-    char* subToken = strtok(combTemp, ";");
-    while (subToken != NULL && v.numCombustiveis < 10) {
-        limparEspacos(v.combustivel[v.numCombustiveis], subToken);
-        v.numCombustiveis++;
-        subToken = strtok(NULL, ";");
+    char tempComb[200];
+    strcpy(tempComb, campos[5]);
+    char* token = strtok(tempComb, ";");
+    while (token != NULL && v.numCombustiveis < 10) {
+        trim(token);
+        strcpy(v.combustivel[v.numCombustiveis++], token);
+        token = strtok(NULL, ";");
     }
 
     v.cilindros = atoi(campos[6]);
@@ -112,95 +109,100 @@ Veiculo parseVeiculo(char* s) {
 
 void formatVeiculo(Veiculo v, char* buffer) {
     char combStr[500];
-    strcpy(combStr, "[");
+    int pos = 0;
+    combStr[pos++] = '[';
     for (int i = 0; i < v.numCombustiveis; i++) {
-        strcat(combStr, v.combustivel[i]);
-        if (i < v.numCombustiveis - 1) strcat(combStr, ", ");
+        for (int j = 0; v.combustivel[i][j] != '\0'; j++) {
+            combStr[pos++] = v.combustivel[i][j];
+        }
+        if (i < v.numCombustiveis - 1) combStr[pos++] = ',';
     }
-    strcat(combStr, "]");
+    combStr[pos++] = ']';
+    combStr[pos] = '\0';
 
     char dataStr[50];
     formatData(v.dataRegistro, dataStr);
 
-    sprintf(buffer, "[%d ## %s ## %s ## %d ## %s ## %s ## %d ## %g ## %s ## %s ## %g ## %g ## %g ## %s ## %s]",
+    sprintf(buffer, "[%d ## %s ## %s ## %d ## %s ## %s ## %d ## %.1f ## %s ## %s ## %.2f ## %.2f ## %.1f ## %s ## %s]",
             v.id, v.marca, v.modelo, v.ano, v.categoria, combStr, v.cilindros,
             v.cilindrada, v.transmissao, v.tracao, v.consumoCidade, v.consumoEstrada,
             v.co2, v.turbo ? "true" : "false", dataStr);
 }
 
-Veiculo* lerCsv(const char* caminhoArquivo, int* n) {
+Veiculo* lerCsv(const char* caminhoArquivo, int* total) {
     FILE* arq = fopen(caminhoArquivo, "r");
-    if (arq == NULL) {
-        *n = 0;
-        return NULL;
-    }
+    if (arq == NULL) { *total = 0; return NULL; }
 
     Veiculo* veiculos = (Veiculo*) malloc(20000 * sizeof(Veiculo));
     int count = 0;
     char linha[2048];
 
-    // Pula cabecalho
     if (fgets(linha, sizeof(linha), arq) != NULL) {}
 
     while (fgets(linha, sizeof(linha), arq) != NULL) {
-        char temp[2048];
-        limparEspacos(temp, linha);
-        if (strlen(temp) > 0) {
+        trim(linha);
+        if (strlen(linha) > 0) {
             veiculos[count++] = parseVeiculo(linha);
         }
     }
-
     fclose(arq);
-    *n = count;
+    *total = count;
     return veiculos;
 }
 
-// Algoritmo de Ordenacao por Selecao comparando o modelo
-void selecaoModelo(Veiculo* v, int n) {
-    for (int i = 0; i < n - 1; i++) {
+// Algoritmo de Selecao usando strcasecmp (case-insensitive) e desempate por id
+void selecao(Veiculo* v, int n) {
+    for (int i = 0; i < (n - 1); i++) {
         int menor = i;
-        for (int j = i + 1; j < n; j++) {
-            if (strcmp(v[j].modelo, v[menor].modelo) < 0) {
+        for (int j = (i + 1); j < n; j++) {
+            int comp = strcasecmp(v[j].modelo, v[menor].modelo);
+            if (comp < 0) {
                 menor = j;
+            } else if (comp == 0) {
+                if (v[j].id < v[menor].id) {
+                    menor = j;
+                }
             }
         }
         if (menor != i) {
-            Veiculo tmp = v[i];
+            Veiculo temp = v[i];
             v[i] = v[menor];
-            v[menor] = tmp;
+            v[menor] = temp;
         }
     }
 }
 
 int main() {
-    int totalVeiculos = 0;
-    Veiculo* todosVeiculos = lerCsv("/tmp/VEICULOS.CSV", &totalVeiculos);
+    int totalBase = 0;
+    Veiculo* base = lerCsv("/tmp/veiculos.csv", &totalBase);
+    if (base == NULL || totalBase == 0) {
+        base = lerCsv("/tmp/VEICULOS.CSV", &totalBase);
+    }
 
-    Veiculo* selecionados = (Veiculo*) malloc(20000 * sizeof(Veiculo));
-    int numSelecionados = 0;
+    Veiculo entrada[5000];
+    int n = 0;
     int idBusca;
 
-    // Le a primeira parte da entrada (IDs)
+    // Leitura dos IDs ate -1
     while (scanf("%d", &idBusca) == 1 && idBusca != -1) {
-        for (int i = 0; i < totalVeiculos; i++) {
-            if (todosVeiculos[i].id == idBusca) {
-                selecionados[numSelecionados++] = todosVeiculos[i];
+        for (int i = 0; i < totalBase; i++) {
+            if (base[i].id == idBusca) {
+                entrada[n++] = base[i];
                 break;
             }
         }
     }
 
-    // Ordena os elementos selecionados por Selecao
-    selecaoModelo(selecionados, numSelecionados);
+    // Ordenacao por Selecao
+    selecao(entrada, n);
 
     // Imprime o resultado ordenado
-    char bufferOut[3000];
-    for (int i = 0; i < numSelecionados; i++) {
-        formatVeiculo(selecionados[i], bufferOut);
-        printf("%s\n", bufferOut);
+    char buffer[3000];
+    for (int i = 0; i < n; i++) {
+        formatVeiculo(entrada[i], buffer);
+        printf("%s\n", buffer);
     }
 
-    free(todosVeiculos);
-    free(selecionados);
+    if (base != NULL) free(base);
     return 0;
 }

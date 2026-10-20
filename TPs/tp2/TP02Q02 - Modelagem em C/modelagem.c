@@ -15,7 +15,7 @@ typedef struct {
     char modelo[100];
     int ano;
     char categoria[100];
-    char combustivel[10][50]; // Suporta ate 10 tipos de combustivel
+    char combustivel[10][50];
     int numCombustiveis;
     int cilindros;
     double cilindrada;
@@ -29,86 +29,87 @@ typedef struct {
 } Veiculo;
 
 // Remove espacos e quebras de linha das pontas
-void limparEspacos(char* dest, const char* src) {
-    if (src == NULL) {
-        dest[0] = '\0';
-        return;
+void trim(char* str) {
+    if (str == NULL || strlen(str) == 0) return;
+
+    int i = 0;
+    while (str[i] == ' ' || str[i] == '\t' || str[i] == '\r' || str[i] == '\n') {
+        i++;
     }
 
-    int inicio = 0;
-    int fim = strlen(src) - 1;
-
-    while (inicio <= fim && (src[inicio] <= ' ' || src[inicio] == '\r' || src[inicio] == '\n')) {
-        inicio++;
-    }
-    while (fim >= inicio && (src[fim] <= ' ' || src[fim] == '\r' || src[fim] == '\n')) {
-        fim--;
+    if (i > 0) {
+        int j = 0;
+        while (str[i] != '\0') {
+            str[j++] = str[i++];
+        }
+        str[j] = '\0';
     }
 
-    int k = 0;
-    for (int i = inicio; i <= fim; i++) {
-        dest[k++] = src[i];
+    int len = strlen(str);
+    while (len > 0 && (str[len - 1] == ' ' || str[len - 1] == '\t' || str[len - 1] == '\r' || str[len - 1] == '\n')) {
+        str[len - 1] = '\0';
+        len--;
     }
-    dest[k] = '\0';
 }
 
-// Converte a String "AAAA-MM-DD" para struct Data
+// Parse de data no formato AAAA-MM-DD
 Data parseData(char* s) {
-    Data d;
-    d.ano = 0;
-    d.mes = 0;
-    d.dia = 0;
-
-    char temp[100];
-    limparEspacos(temp, s);
-
-    if (strlen(temp) > 0) {
-        sscanf(temp, "%d-%d-%d", &d.ano, &d.mes, &d.dia);
+    Data d = {0, 0, 0};
+    if (s != NULL && strlen(s) >= 8) {
+        sscanf(s, "%d-%d-%d", &d.ano, &d.mes, &d.dia);
     }
-
     return d;
 }
 
-// Formata a data para DD/MM/YYYY
+// Formata data em DD/MM/YYYY
 void formatData(Data d, char* buffer) {
     sprintf(buffer, "%02d/%02d/%04d", d.dia, d.mes, d.ano);
 }
 
-// Parse da linha do CSV para a struct Veiculo
+// Separa campos por virgula tratando colunas vazias de forma segura
+int separarCampos(char* linha, char campos[15][200]) {
+    int col = 0;
+    int pos = 0;
+    int len = strlen(linha);
+
+    for (int i = 0; i <= len && col < 15; i++) {
+        if (linha[i] == ',' || linha[i] == '\0' || linha[i] == '\n' || linha[i] == '\r') {
+            campos[col][pos] = '\0';
+            trim(campos[col]);
+            col++;
+            pos = 0;
+            if (linha[i] == '\0' || linha[i] == '\n' || linha[i] == '\r') break;
+        } else {
+            if (pos < 199) {
+                campos[col][pos++] = linha[i];
+            }
+        }
+    }
+    return col;
+}
+
+// Parse da linha inteira do CSV para struct Veiculo
 Veiculo parseVeiculo(char* s) {
     Veiculo v;
     v.numCombustiveis = 0;
 
-    char tempLine[2048];
-    strcpy(tempLine, s);
-
-    // Array para guardar os campos separados por virgula
     char campos[15][200];
-    int col = 0;
+    separarCampos(s, campos);
 
-    char* token = strtok(tempLine, ",");
-    while (token != NULL && col < 15) {
-        limparEspacos(campos[col], token);
-        col++;
-        token = strtok(NULL, ",");
-    }
-
-    // Preenche os campos primitivos
     v.id = atoi(campos[0]);
     strcpy(v.marca, campos[1]);
     strcpy(v.modelo, campos[2]);
     v.ano = atoi(campos[3]);
     strcpy(v.categoria, campos[4]);
 
-    // Trata campo multivalorado de combustivel (separado por ';')
-    char combTemp[200];
-    strcpy(combTemp, campos[5]);
-
-    char* subToken = strtok(combTemp, ";");
-    while (subToken != NULL && v.numCombustiveis < 10) {
-        limparEspacos(v.combustivel[v.numCombustiveis], subToken);
-        v.numCombustiveis++;
-        subToken = strtok(NULL, ";");
+    // Trata o campo multivalorado de combustiveis separado por ';'
+    char tempComb[200];
+    strcpy(tempComb, campos[5]);
+    char* token = strtok(tempComb, ";");
+    while (token != NULL && v.numCombustiveis < 10) {
+        trim(token);
+        strcpy(v.combustivel[v.numCombustiveis++], token);
+        token = strtok(NULL, ";");
     }
 
     v.cilindros = atoi(campos[6]);
@@ -130,37 +131,42 @@ Veiculo parseVeiculo(char* s) {
     return v;
 }
 
-// Formata a saida conforme a especificacao da PUC
+// Formata o veiculo
 void formatVeiculo(Veiculo v, char* buffer) {
     char combStr[500];
-    strcpy(combStr, "[");
+    int pos = 0;
+
+    combStr[pos++] = '[';
 
     for (int i = 0; i < v.numCombustiveis; i++) {
-        strcat(combStr, v.combustivel[i]);
+        // Copia o nome do combustível caractere por caractere
+        for (int j = 0; v.combustivel[i][j] != '\0'; j++) {
+            combStr[pos++] = v.combustivel[i][j];
+        }
+
+        // Adiciona vírgula entre os elementos (sem espaço)
         if (i < v.numCombustiveis - 1) {
-            strcat(combStr, ", ");
+            combStr[pos++] = ',';
         }
     }
-    strcat(combStr, "]");
+
+    combStr[pos++] = ']';
+    combStr[pos] = '\0'; // Finaliza a string
 
     char dataStr[50];
     formatData(v.dataRegistro, dataStr);
 
-    sprintf(buffer, "[%d ## %s ## %s ## %d ## %s ## %s ## %d ## g ## %s ## %s ## g ## g ## g ## %s ## %s]",
-            v.id, v.marca, v.modelo, v.ano, v.categoria, combStr, v.cilindros,
-            v.transmissao, v.tracao, v.turbo ? "true" : "false", dataStr);
-
-    // Ajusta os doubles formatando corretamente
-    sprintf(buffer, "[%d ## %s ## %s ## %d ## %s ## %s ## %d ## %g ## %s ## %s ## %g ## %g ## %g ## %s ## %s]",
+    // Formata a string final diretamente
+    sprintf(buffer, "[%d ## %s ## %s ## %d ## %s ## %s ## %d ## %.1f ## %s ## %s ## %.2f ## %.2f ## %.1f ## %s ## %s]",
             v.id, v.marca, v.modelo, v.ano, v.categoria, combStr, v.cilindros,
             v.cilindrada, v.transmissao, v.tracao, v.consumoCidade, v.consumoEstrada,
             v.co2, v.turbo ? "true" : "false", dataStr);
 }
 
-Veiculo* lerCsv(const char* caminhoArquivo, int* n) {
+Veiculo* lerCsv(const char* caminhoArquivo, int* total) {
     FILE* arq = fopen(caminhoArquivo, "r");
     if (arq == NULL) {
-        *n = 0;
+        *total = 0;
         return NULL;
     }
 
@@ -168,33 +174,31 @@ Veiculo* lerCsv(const char* caminhoArquivo, int* n) {
     int count = 0;
     char linha[2048];
 
-    // Pula o cabecalho
-    if (fgets(linha, sizeof(linha), arq) != NULL) {
-        // Ignorado
-    }
+    // Descarta cabecalho
+    if (fgets(linha, sizeof(linha), arq) != NULL) {}
 
-    // Le as linhas ate o fim
     while (fgets(linha, sizeof(linha), arq) != NULL) {
-        char temp[2048];
-        limparEspacos(temp, linha);
-        if (strlen(temp) > 0) {
+        trim(linha);
+        if (strlen(linha) > 0) {
             veiculos[count++] = parseVeiculo(linha);
         }
     }
 
     fclose(arq);
-    *n = count;
+    *total = count;
     return veiculos;
 }
 
 int main() {
     int totalVeiculos = 0;
-    Veiculo* veiculos = lerCsv("/tmp/VEICULOS.CSV", &totalVeiculos);
+    Veiculo* veiculos = lerCsv("/tmp/veiculos.csv", &totalVeiculos);
+    if (veiculos == NULL || totalVeiculos == 0) {
+        veiculos = lerCsv("/tmp/VEICULOS.CSV", &totalVeiculos);
+    }
 
     int idBusca;
     char bufferOut[3000];
 
-    // Leitura da entrada padrao ate receber -1
     while (scanf("%d", &idBusca) == 1 && idBusca != -1) {
         for (int i = 0; i < totalVeiculos; i++) {
             if (veiculos[i].id == idBusca) {
@@ -205,7 +209,6 @@ int main() {
         }
     }
 
-    // Libera a memoria alocada
     if (veiculos != NULL) {
         free(veiculos);
     }
